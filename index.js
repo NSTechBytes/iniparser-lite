@@ -75,7 +75,6 @@ class IniParser {
     let sectionMatched = false;
     let keyMatched = false;
     let lines = [];
-    let errorOccurred = false;
 
     const targetSection = section.toLowerCase();
     const targetKey = key.toLowerCase();
@@ -87,6 +86,7 @@ class IniParser {
 
         const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
         if (sectionMatch) {
+          // If we were in a matched section but didn't find the key, add it before moving to the next section
           if (sectionMatched && !keyMatched) {
             lines.push(`${key}="${value}"`);
             keyMatched = true;
@@ -124,44 +124,99 @@ class IniParser {
         lines.push(outputLine);
       }
 
-      // Append key if section matched but key not found
+      // After processing all lines, if we were in a matched section but didn't find the key, add it
       if (sectionMatched && !keyMatched) {
         lines.push(`${key}="${value}"`);
+        keyMatched = true;
       }
 
-      // If section not found, add both section and key
+      // Only add a new section if we never found a matching section
       if (!sectionMatched) {
-        if (!lines[lines.length - 1].endsWith("\n")) lines.push(""); // ensure spacing
+        // Check if lines array is not empty and last line doesn't end with newline
+        if (lines.length > 0 && !lines[lines.length - 1].endsWith("\n")) {
+          lines.push(""); // ensure spacing
+        }
         lines.push(`[${section}]`);
         lines.push(`${key}="${value}"`);
       }
 
       const resultText = lines.join("\n") + "\n"; // ensure newline at end
-      const encoded = iconv.encode(resultText, encoding);
-
-      await fsp.writeFile(tmpPath, encoded);
+      
+      // Write the file using the same encoding as the original file
+      await this.writeFileWithEncoding(tmpPath, resultText, encoding);
       await fsp.rename(tmpPath, filePath);
     } catch (err) {
-      errorOccurred = true;
       console.error("Failed to write INI file:", err);
       if (await this.fileExists(tmpPath)) {
         await fsp.unlink(tmpPath); // clean up temp file
       }
+      throw err; // Re-throw to let caller handle the error
     }
   }
 
   /**
-   * Detects the encoding of a file using chardet.
-   * @param {string} filePath - File to analyze
-   * @returns {Promise<string>} Normalized encoding
+   * Detect file encoding by sampling the first bytes.
+   * @param {string} filePath - Path to the file.
+   * @param {number} sampleSize - Number of bytes to sample.
+   * @returns {Promise<string>} Detected encoding or fallback.
    */
-  async detectEncoding(filePath) {
-    const fd = await fsp.open(filePath, "r");
-    const { buffer } = await fd.read(Buffer.alloc(1024), 0, 1024, 0);
-    await fd.close();
-    return (chardet.detect(buffer) || "utf-8")
-      .toLowerCase()
-      .replace(/[-_]/g, "");
+  async detectEncoding(filePath, sampleSize = 4096) {
+    return new Promise((resolve, reject) => {
+      const readStream = fs.createReadStream(filePath, { start: 0, end: sampleSize - 1 });
+      const chunks = [];
+
+      readStream.on("data", (chunk) => chunks.push(chunk));
+      readStream.on("end", () => {
+        const buffer = Buffer.concat(chunks);
+        // Fallback to Windows-1252 for legacy INI files
+        const encoding = chardet.detect(buffer) || "windows-1252";
+        resolve(encoding);
+      });
+      readStream.on("error", (err) => {
+        console.warn("Encoding detection failed, defaulting to windows-1252:", err);
+        resolve("windows-1252");
+      });
+    });
+  }
+
+  /**
+   * Write file with proper encoding handling.
+   * @param {string} filePath - Path to write to.
+   * @param {string} content - Content to write.
+   * @param {string} encoding - Encoding to use.
+   */
+  async writeFileWithEncoding(filePath, content, encoding) {
+    try {
+      const normalizedEncoding = encoding.toLowerCase();
+      
+      // Handle UTF-8 and ASCII with Node.js built-in support
+      if (normalizedEncoding === 'utf-8' || normalizedEncoding === 'utf8' || normalizedEncoding === 'ascii') {
+        await fsp.writeFile(filePath, content, 'utf8');
+        return;
+      }
+      
+      // Handle UTF-16LE specifically (requires BOM)
+      if (normalizedEncoding === 'utf-16le' || normalizedEncoding === 'utf16le') {
+        const encoded = iconv.encode(content, 'utf16le');
+        await fsp.writeFile(filePath, encoded);
+        return;
+      }
+      
+      // Handle UTF-16BE specifically (requires BOM)
+      if (normalizedEncoding === 'utf-16be' || normalizedEncoding === 'utf16be') {
+        const encoded = iconv.encode(content, 'utf16be');
+        await fsp.writeFile(filePath, encoded);
+        return;
+      }
+      
+      // For other encodings, use iconv-lite
+      const encoded = iconv.encode(content, encoding);
+      await fsp.writeFile(filePath, encoded);
+      
+    } catch (err) {
+      console.warn(`Failed to write with encoding ${encoding}, falling back to UTF-8:`, err);
+      await fsp.writeFile(filePath, content, 'utf8');
+    }
   }
 
   /**
