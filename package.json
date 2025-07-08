@@ -1,0 +1,20 @@
+{
+  "name": "iniparser",
+  "version": "1.0.0",
+  "description": "A robust, streaming INI file parser for Node.js with automatic encoding detection and case-insensitive operations.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node  test/test.js"
+  },
+  "keywords": [
+    "ini",
+    "parser"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {
+    "chardet": "^2.1.0",
+    "iconv-lite": "^0.6.3"
+  }
+}
