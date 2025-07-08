@@ -30,7 +30,8 @@ class IniParser {
       if (sectionMatch) {
         if (currentSection !== null)
           onSectionParsed(currentSection, currentData);
-        currentSection = sectionMatch[1].trim();
+        // Normalize and lowercase section name when returning
+        currentSection = sectionMatch[1].trim().toLowerCase();
         currentData = {};
         continue;
       }
@@ -38,7 +39,11 @@ class IniParser {
       const kvMatch = trimmed.match(/^([^=]+)=(.*)$/);
       if (kvMatch) {
         const key = kvMatch[1].trim();
-        let value = kvMatch[2].trim().replace(/^["'](.*)["']$/, "$1");
+        let value = kvMatch[2].trim();
+        
+        // Strip quotes only when they match at both ends
+        value = this.stripMatchingQuotes(value);
+        
         if (currentSection === null) {
           console.warn(`Skipping global key "${key}" outside any section.`);
           continue;
@@ -52,6 +57,25 @@ class IniParser {
     if (currentSection !== null) {
       onSectionParsed(currentSection, currentData);
     }
+  }
+
+  /**
+   * Strips quotes only when they match at both ends.
+   * @param {string} value - The value to process.
+   * @returns {string} Value with matching quotes stripped.
+   */
+  stripMatchingQuotes(value) {
+    if (value.length < 2) return value;
+    
+    const first = value[0];
+    const last = value[value.length - 1];
+    
+    // Check if quotes match at both ends
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return value.slice(1, -1);
+    }
+    
+    return value;
   }
 
   /**
