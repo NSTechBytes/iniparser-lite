@@ -30,8 +30,8 @@ class IniParser {
       if (sectionMatch) {
         if (currentSection !== null)
           onSectionParsed(currentSection, currentData);
-        // Normalize and lowercase section name when returning
-        currentSection = sectionMatch[1].trim().toLowerCase();
+        // Keep original case for section name
+        currentSection = sectionMatch[1].trim();
         currentData = {};
         continue;
       }
@@ -48,7 +48,8 @@ class IniParser {
           console.warn(`Skipping global key "${key}" outside any section.`);
           continue;
         }
-        currentData[key.toLowerCase()] = value;
+        // Keep original case for key name
+        currentData[key] = value;
       } else {
         console.warn(`Skipping malformed line: "${line}"`);
       }
@@ -96,7 +97,8 @@ class IniParser {
     const rl = readline.createInterface({ input: readStream });
 
     let currentSection = null;
-    let sectionMatched = false;
+    let currentSectionMatched = false;
+    let targetSectionFound = false;
     let keyMatched = false;
     let lines = [];
 
@@ -111,18 +113,25 @@ class IniParser {
         const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
         if (sectionMatch) {
           // If we were in a matched section but didn't find the key, add it before moving to the next section
-          if (sectionMatched && !keyMatched) {
+          if (currentSectionMatched && !keyMatched) {
             lines.push(`${key}="${value}"`);
             keyMatched = true;
           }
 
           currentSection = sectionMatch[1].trim();
-          sectionMatched = currentSection.toLowerCase() === targetSection;
-        } else if (sectionMatched) {
+          const currentSectionLower = currentSection.toLowerCase();
+          currentSectionMatched = currentSectionLower === targetSection;
+          
+          if (currentSectionMatched) {
+            targetSectionFound = true;
+            keyMatched = false; // Reset for this section
+          }
+        } else if (currentSectionMatched) {
           const keyValMatch = trimmed.match(/^([^=]+)=(.*)$/);
           if (keyValMatch) {
             const existingKey = keyValMatch[1].trim();
-            if (existingKey.toLowerCase() === targetKey) {
+            const existingKeyLower = existingKey.toLowerCase();
+            if (existingKeyLower === targetKey) {
               outputLine = `${existingKey}="${value}"`; // preserve original key case
               keyMatched = true;
             }
@@ -148,17 +157,20 @@ class IniParser {
         lines.push(outputLine);
       }
 
+      // Close the readline interface to free up resources
+      rl.close();
+
       // After processing all lines, if we were in a matched section but didn't find the key, add it
-      if (sectionMatched && !keyMatched) {
+      if (currentSectionMatched && !keyMatched) {
         lines.push(`${key}="${value}"`);
         keyMatched = true;
       }
 
       // Only add a new section if we never found a matching section
-      if (!sectionMatched) {
-        // Check if lines array is not empty and last line doesn't end with newline
-        if (lines.length > 0 && !lines[lines.length - 1].endsWith("\n")) {
-          lines.push(""); // ensure spacing
+      if (!targetSectionFound) {
+        // Add empty line before new section if file doesn't end with empty line
+        if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+          lines.push("");
         }
         lines.push(`[${section}]`);
         lines.push(`${key}="${value}"`);
@@ -170,7 +182,7 @@ class IniParser {
       await this.writeFileWithEncoding(tmpPath, resultText, encoding);
       await fsp.rename(tmpPath, filePath);
     } catch (err) {
-      console.error("Failed to write INI file:", err);
+      console.error(`Failed to write INI file "${filePath}":`, err.message);
       if (await this.fileExists(tmpPath)) {
         await fsp.unlink(tmpPath); // clean up temp file
       }
