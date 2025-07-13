@@ -4,26 +4,18 @@ A robust, streaming INI file parser for Node.js with automatic encoding detectio
 
 ## Features
 
-* **Streaming parser** - Memory efficient for large INI files
-* **Automatic encoding detection** - Supports various text encodings
-* **Case-insensitive operations** - Matches sections and keys regardless of case
-* **Preserves original formatting** - Maintains original case and structure when updating
-* **Safe file operations** - Uses temporary files to prevent data loss
-* **Comprehensive error handling** - Graceful handling of malformed lines
-* **Comment support** - Skips lines starting with `;` or `#`
+- **Streaming Parser**: Memory-efficient parsing of large INI files
+- **Automatic Encoding Detection**: Supports UTF-8, UTF-16, Windows-1252, and more
+- **Case-Insensitive Operations**: Find and modify sections/keys regardless of case
+- **Preserves Original Casing**: Maintains original section and key names when updating
+- **Quote Handling**: Automatically strips matching quotes from values
+- **Robust Error Handling**: Graceful handling of malformed lines and encoding issues
+- **Section-by-Section Processing**: Process INI files section by section with callbacks
 
 ## Installation
 
 ```bash
 npm install iniparser-lite
-```
-
-## Dependencies
-
-This module requires the following dependencies:
-
-```bash
-npm install iconv-lite chardet
 ```
 
 ## Usage
@@ -42,165 +34,102 @@ await parser.parseFile('config.ini', (section, data) => {
 });
 ```
 
-### Updating Values
+### Setting Values
 
 ```javascript
 const IniParser = require('iniparser-lite');
 
 const parser = new IniParser();
 
-// Update or add a key-value pair
-await parser.setValue('config.ini', 'database', 'host', 'localhost');
-await parser.setValue('config.ini', 'database', 'port', '5432');
+// Update or add a key-value pair (case-insensitive)
+await parser.setValue('config.ini', 'Database', 'host', 'localhost');
+await parser.setValue('config.ini', 'database', 'PORT', '5432'); // Case doesn't matter
 ```
 
-### Complete Example
+### Example INI File
 
-```javascript
-const IniParser = require('iniparser-lite');
+```ini
+[Database]
+host=localhost
+port=5432
+username="admin"
+password='secret123'
 
-async function main() {
-  const parser = new IniParser();
-  
-  // Parse the entire file
-  const sections = {};
-  await parser.parseFile('app.ini', (section, data) => {
-    sections[section] = data;
-  });
-  
-  console.log('Parsed sections:', sections);
-  
-  // Update a configuration value
-  await parser.setValue('app.ini', 'server', 'port', '8080');
-  
-  // Add a new section and key
-  await parser.setValue('app.ini', 'logging', 'level', 'debug');
-}
-
-main().catch(console.error);
+[Application]
+name=MyApp
+version=1.0.0
+debug=true
 ```
 
 ## API Reference
 
 ### `parseFile(filePath, onSectionParsed)`
 
-Streams and parses INI sections with a callback function.
+Streams and parses INI sections with a callback.
 
 **Parameters:**
+- `filePath` (string): Path to the INI file
+- `onSectionParsed` (function): Callback function called for each section
+  - `section` (string): Section name
+  - `data` (object): Key-value pairs in the section
 
-* `filePath` (string) - Path to the INI file
-* `onSectionParsed` (function) - Callback function called for each section
-
-  * `section` (string) - Section name
-  * `data` (object) - Key-value pairs in the section (keys are lowercase)
-
-**Returns:** `Promise<void>`
-
-**Example:**
-
-```javascript
-await parser.parseFile('config.ini', (section, data) => {
-  if (section === 'database') {
-    console.log('Database config:', data);
-  }
-});
-```
+**Returns:** Promise
 
 ### `setValue(filePath, section, key, value)`
 
 Updates or adds a key-value pair under a section directly in the file.
 
 **Parameters:**
+- `filePath` (string): Path to the INI file
+- `section` (string): Section name (case-insensitive)
+- `key` (string): Key name (case-insensitive)
+- `value` (string): Value to write
 
-* `filePath` (string) - Path to the INI file
-* `section` (string) - Section name (case-insensitive)
-* `key` (string) - Key name (case-insensitive)
-* `value` (string) - Value to write
+**Returns:** Promise
 
-**Returns:** `Promise<void>`
+## Features in Detail
 
-**Features:**
+### Encoding Detection
 
-* Case-insensitive matching for sections and keys
-* Preserves original casing in the file
-* Creates section if it doesn't exist
-* Uses temporary files for safe operations
+The parser automatically detects file encoding using the first 4KB of the file. Supported encodings include:
+- UTF-8
+- UTF-16 (LE/BE)
+- Windows-1252 (default fallback)
+- ASCII
+- And more via `chardet` library
 
-**Example:**
+### Case-Insensitive Operations
+
+Operations are case-insensitive for matching but preserve original casing:
 
 ```javascript
-// Updates existing key or creates new one
-await parser.setValue('config.ini', 'Database', 'HOST', 'localhost');
+// Original file has [Database] and Host=localhost
+await parser.setValue('config.ini', 'database', 'host', 'newhost');
+// Result: [Database] section with Host=newhost (original casing preserved)
 ```
 
-### `detectEncoding(filePath)`
+### Quote Handling
 
-Detects the encoding of a file using charset detection.
-
-**Parameters:**
-
-* `filePath` (string) - File to analyze
-
-**Returns:** `Promise<string>` - Normalized encoding name
-
-### `fileExists(filePath)`
-
-Checks if a file exists.
-
-**Parameters:**
-
-* `filePath` (string) - Path to check
-
-**Returns:** `Promise<boolean>`
-
-## INI File Format
-
-The parser supports standard INI file format:
+Values are automatically cleaned of matching quotes:
 
 ```ini
-; Comments start with semicolon
-# Or with hash symbol
-
-[section1]
-key1=value1
-key2="quoted value"
-key3='single quoted'
-
-[section2]
-database_host=localhost
-database_port=5432
+key1="value"     # Becomes: value
+key2='value'     # Becomes: value
+key3="value'     # Remains: "value' (non-matching quotes)
 ```
 
-### Supported Features
+### Error Handling
 
-* **Sections**: `[section_name]`
-* **Key-value pairs**: `key=value`
-* **Comments**: Lines starting with `;` or `#`
-* **Quoted values**: Single or double quotes (automatically stripped)
-* **Global keys**: Keys outside sections (logged as warnings)
+The parser gracefully handles:
+- Malformed lines (logs warnings and continues)
+- Encoding detection failures (falls back to Windows-1252)
+- Global keys outside sections (logs warnings and skips)
+- File system errors (propagates with proper cleanup)
 
-### Parser Behavior
+## Requirements
 
-* Keys are converted to lowercase for consistent access
-* Original casing is preserved when updating files
-* Malformed lines are skipped with warnings
-* Global keys (outside sections) are skipped with warnings
-* Empty lines and comments are ignored
-
-## Error Handling
-
-The parser includes comprehensive error handling:
-
-* **Malformed lines**: Skipped with console warnings
-* **Encoding detection**: Falls back to UTF-8 if detection fails
-* **File operations**: Uses temporary files to prevent corruption
-* **Global keys**: Logged as warnings but processing continues
-
-## Performance
-
-* **Memory efficient**: Streams large files without loading entirely into memory
-* **Encoding aware**: Automatic detection prevents encoding issues
-* **Safe updates**: Temporary file operations prevent data loss
+- Node.js 12.0.0 or higher
+- Dependencies: `chardet`, `iconv-lite`
 
 ## License
 
@@ -208,4 +137,8 @@ MIT
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

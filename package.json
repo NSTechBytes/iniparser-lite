@@ -1,17 +1,44 @@
 {
-  "name": "iniparser",
+  "name": "iniparser-lite",
   "version": "1.0.0",
   "description": "A robust, streaming INI file parser for Node.js with automatic encoding detection and case-insensitive operations.",
   "main": "index.js",
   "scripts": {
-    "test": "node  test/test.js"
+    "test": "node test/test.js"
   },
   "keywords": [
     "ini",
-    "parser"
+    "parser",
+    "config",
+    "configuration",
+    "file",
+    "streaming",
+    "encoding",
+    "case-insensitive",
+    "windows-1252",
+    "utf-8"
   ],
-  "author": "Your Name",
+  "author": {
+    "name": "NSTechBytes",
+    "url": "https://nstechbytes.pages.dev"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NSTechBytes/iniparser-lite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NSTechBytes/iniparser-lite/issues"
+  },
+  "homepage": "https://github.com/NSTechBytes/iniparser-lite#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
   "devDependencies": {},
   "dependencies": {
     "chardet": "^2.1.0",
