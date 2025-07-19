@@ -86,8 +86,10 @@ class IniParser {
    * @param {string} section - Section name (case-insensitive).
    * @param {string} key - Key name (case-insensitive).
    * @param {string} value - Value to write.
+   * @param {object} options - Options object.
+   * @param {boolean} options.quote - Whether to wrap value in quotes. If not specified, auto-determines based on value type.
    */
-  async setValue(filePath, section, key, value) {
+  async setValue(filePath, section, key, value, options = {}) {
     const encoding = await this.detectEncoding(filePath);
     const tmpPath = filePath + ".tmp";
 
@@ -105,6 +107,25 @@ class IniParser {
     const targetSection = section.toLowerCase();
     const targetKey = key.toLowerCase();
 
+    // Function to format the value based on quote option
+    const formatValue = (val) => {
+      let shouldQuote = options.quote;
+      
+      // Auto-determine quoting if not explicitly specified
+      if (shouldQuote === undefined || shouldQuote === null) {
+        const stringValue = String(val);
+        // Don't quote if it's a simple number (integer or decimal) or boolean-like value
+        shouldQuote = !/^(\d+(\.\d+)?|true|false)$/i.test(stringValue);
+        
+        // Also don't quote if the value contains no spaces and no special characters that would need quoting
+        if (shouldQuote && !/[\s"'=\[\];#]/.test(stringValue)) {
+          shouldQuote = false;
+        }
+      }
+      
+      return shouldQuote ? `"${val}"` : val;
+    };
+
     try {
       for await (const line of rl) {
         const trimmed = line.trim();
@@ -114,7 +135,7 @@ class IniParser {
         if (sectionMatch) {
           // If we were in a matched section but didn't find the key, add it before moving to the next section
           if (currentSectionMatched && !keyMatched) {
-            lines.push(`${key}="${value}"`);
+            lines.push(`${key}=${formatValue(value)}`);
             keyMatched = true;
           }
 
@@ -132,7 +153,7 @@ class IniParser {
             const existingKey = keyValMatch[1].trim();
             const existingKeyLower = existingKey.toLowerCase();
             if (existingKeyLower === targetKey) {
-              outputLine = `${existingKey}="${value}"`; // preserve original key case
+              outputLine = `${existingKey}=${formatValue(value)}`; // preserve original key case
               keyMatched = true;
             }
           } else if (
@@ -162,7 +183,7 @@ class IniParser {
 
       // After processing all lines, if we were in a matched section but didn't find the key, add it
       if (currentSectionMatched && !keyMatched) {
-        lines.push(`${key}="${value}"`);
+        lines.push(`${key}=${formatValue(value)}`);
         keyMatched = true;
       }
 
@@ -173,7 +194,7 @@ class IniParser {
           lines.push("");
         }
         lines.push(`[${section}]`);
-        lines.push(`${key}="${value}"`);
+        lines.push(`${key}=${formatValue(value)}`);
       }
 
       const resultText = lines.join("\n") + "\n"; // ensure newline at end

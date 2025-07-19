@@ -1,6 +1,6 @@
 {
   "name": "iniparser-lite",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A robust, streaming INI file parser for Node.js with automatic encoding detection and case-insensitive operations.",
   "main": "index.js",
   "scripts": {
