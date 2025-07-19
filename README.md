@@ -8,7 +8,7 @@ A robust, streaming INI file parser for Node.js with automatic encoding detectio
 - **Automatic Encoding Detection**: Supports UTF-8, UTF-16, Windows-1252, and more
 - **Case-Insensitive Operations**: Find and modify sections/keys regardless of case
 - **Preserves Original Casing**: Maintains original section and key names when updating
-- **Quote Handling**: Automatically strips matching quotes from values
+- **Smart Value Quoting**: Automatic quote handling with configurable quoting behavior
 - **Robust Error Handling**: Graceful handling of malformed lines and encoding issues
 - **Section-by-Section Processing**: Process INI files section by section with callbacks
 
@@ -44,6 +44,11 @@ const parser = new IniParser();
 // Update or add a key-value pair (case-insensitive)
 await parser.setValue('config.ini', 'Database', 'host', 'localhost');
 await parser.setValue('config.ini', 'database', 'PORT', '5432'); // Case doesn't matter
+
+// Control quoting behavior (new feature)
+await parser.setValue('config.ini', 'Settings', 'count', '42', { quote: false }); // No quotes
+await parser.setValue('config.ini', 'Settings', 'name', 'MyApp', { quote: true }); // Force quotes
+await parser.setValue('config.ini', 'Settings', 'enabled', 'true'); // Auto-quoting (no quotes for boolean/numeric)
 ```
 
 ### Example INI File
@@ -59,6 +64,8 @@ password='secret123'
 name=MyApp
 version=1.0.0
 debug=true
+count=42
+enabled=1
 ```
 
 ## API Reference
@@ -75,7 +82,7 @@ Streams and parses INI sections with a callback.
 
 **Returns:** Promise
 
-### `setValue(filePath, section, key, value)`
+### `setValue(filePath, section, key, value, options)`
 
 Updates or adds a key-value pair under a section directly in the file.
 
@@ -84,6 +91,11 @@ Updates or adds a key-value pair under a section directly in the file.
 - `section` (string): Section name (case-insensitive)
 - `key` (string): Key name (case-insensitive)
 - `value` (string): Value to write
+- `options` (object, optional): Configuration options
+  - `quote` (boolean): Control quoting behavior
+    - `true`: Always add quotes around the value
+    - `false`: Never add quotes around the value
+    - `undefined` (default): Auto-quote based on value type
 
 **Returns:** Promise
 
@@ -108,14 +120,49 @@ await parser.setValue('config.ini', 'database', 'host', 'newhost');
 // Result: [Database] section with Host=newhost (original casing preserved)
 ```
 
-### Quote Handling
+### Smart Value Quoting
 
-Values are automatically cleaned of matching quotes:
+The parser now includes intelligent quoting behavior for INI values:
+
+#### Auto-Quoting (Default Behavior)
+When no quoting option is specified, the parser automatically determines whether to quote values:
+
+```javascript
+// These values are written WITHOUT quotes (numeric/boolean detection)
+await parser.setValue('config.ini', 'Settings', 'port', '8080');     // → port=8080
+await parser.setValue('config.ini', 'Settings', 'count', '42');      // → count=42
+await parser.setValue('config.ini', 'Settings', 'enabled', 'true');  // → enabled=true
+await parser.setValue('config.ini', 'Settings', 'disabled', 'false'); // → disabled=false
+await parser.setValue('config.ini', 'Settings', 'flag', '1');        // → flag=1
+await parser.setValue('config.ini', 'Settings', 'off', '0');         // → off=0
+
+// String values are typically written with quotes when they contain spaces or special characters
+await parser.setValue('config.ini', 'Settings', 'name', 'My Application'); // → name="My Application"
+await parser.setValue('config.ini', 'Settings', 'path', '/usr/bin');       // → path=/usr/bin
+```
+
+#### Manual Quoting Control
+You can explicitly control quoting behavior:
+
+```javascript
+// Force quotes around any value
+await parser.setValue('config.ini', 'Settings', 'version', '1.0', { quote: true });
+// Result: version="1.0"
+
+// Prevent quotes around any value  
+await parser.setValue('config.ini', 'Settings', 'title', 'My App', { quote: false });
+// Result: title=My App
+```
+
+### Quote Handling During Parsing
+
+Values are automatically cleaned of matching quotes during parsing:
 
 ```ini
-key1="value"     # Becomes: value
-key2='value'     # Becomes: value
-key3="value'     # Remains: "value' (non-matching quotes)
+key1="value"     # Parsed as: value
+key2='value'     # Parsed as: value  
+key3="value'     # Parsed as: "value' (non-matching quotes)
+key4=unquoted    # Parsed as: unquoted
 ```
 
 ### Error Handling
